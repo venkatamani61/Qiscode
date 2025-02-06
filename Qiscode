@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Secure Notepad</title>
+  <!-- Include CryptoJS library from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <style>
+    /* Basic reset and styling */
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+    }
+    /* Centered container for the password form */
+    #login-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+    }
+    #login-container input[type="password"] {
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 10px;
+      width: 200px;
+    }
+    #login-container button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    /* Notepad styles */
+    #notepad-container {
+      display: none; /* hidden until unlocked */
+      height: 100%;
+      width: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      background: #fff;
+      flex-direction: column;
+    }
+    #notepad-container textarea {
+      flex: 1;
+      width: 100%;
+      padding: 20px;
+      font-size: 16px;
+      border: none;
+      outline: none;
+      resize: none;
+    }
+    #notepad-container button {
+      padding: 15px;
+      font-size: 16px;
+      background: #4CAF50;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    #error-message {
+      color: red;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Password entry screen -->
+  <div id="login-container">
+    <h2>Enter Password to Open Notepad</h2>
+    <input type="password" id="password-input" placeholder="Password">
+    <button id="open-btn">Open Notepad</button>
+    <div id="error-message"></div>
+  </div>
+
+  <!-- Full screen notepad editor -->
+  <div id="notepad-container">
+    <textarea id="note-area" placeholder="Type your notes here..."></textarea>
+    <button id="save-btn">Save &amp; Exit</button>
+  </div>
+
+  <script>
+    // A constant "magic" value to help verify that decryption worked
+    const MAGIC = "SECURE_NOTE";
+
+    // Get references to elements
+    const loginContainer = document.getElementById("login-container");
+    const passwordInput = document.getElementById("password-input");
+    const openBtn = document.getElementById("open-btn");
+    const errorMessage = document.getElementById("error-message");
+
+    const notepadContainer = document.getElementById("notepad-container");
+    const noteArea = document.getElementById("note-area");
+    const saveBtn = document.getElementById("save-btn");
+
+    // Key used for localStorage
+    const STORAGE_KEY = "secure_note";
+
+    // Open Notepad event
+    openBtn.addEventListener("click", function() {
+      errorMessage.textContent = ""; // clear any previous error
+      const password = passwordInput.value.trim();
+
+      if (!password) {
+        errorMessage.textContent = "Please enter a password.";
+        return;
+      }
+
+      let noteData = "";
+      const storedCiphertext = localStorage.getItem(STORAGE_KEY);
+
+      // If a note has been saved before, try to decrypt it
+      if (storedCiphertext) {
+        try {
+          const bytes = CryptoJS.AES.decrypt(storedCiphertext, password);
+          const decryptedStr = bytes.toString(CryptoJS.enc.Utf8);
+          if (!decryptedStr) throw new Error("Decryption failed");
+
+          // Parse the decrypted data (which is a JSON string)
+          const data = JSON.parse(decryptedStr);
+
+          // Check for our magic property to verify correct decryption
+          if (data.magic !== MAGIC) {
+            throw new Error("Invalid password");
+          }
+          noteData = data.text;
+        } catch (e) {
+          errorMessage.textContent = "Incorrect password or corrupted data.";
+          return;
+        }
+      }
+      // Open the full-screen notepad
+      openNotepad(noteData, password);
+    });
+
+    // Function to open the notepad interface
+    function openNotepad(text, password) {
+      // Hide login and show notepad container
+      loginContainer.style.display = "none";
+      notepadContainer.style.display = "flex";
+      noteArea.value = text;
+
+      // Optional: focus the text area
+      noteArea.focus();
+
+      // Save button handler (defined here so it can capture the password variable)
+      saveBtn.onclick = function() {
+        const updatedText = noteArea.value;
+        // Prepare data with our magic value for verification
+        const data = {
+          magic: MAGIC,
+          text: updatedText
+        };
+        // Encrypt the JSON string using the password
+        const ciphertext = CryptoJS.AES.encrypt(JSON.stringify(data), password).toString();
+        localStorage.setItem(STORAGE_KEY, ciphertext);
+        // Return to login screen (or optionally display a "saved" message)
+        notepadContainer.style.display = "none";
+        loginContainer.style.display = "flex";
+        passwordInput.value = "";
+        noteArea.value = "";
+        alert("Your note has been saved.");
+      };
+    }
+  </script>
+</body>
+</html>
